@@ -1,0 +1,295 @@
+---
+title: "world_bank_indi_4"
+author: "Ning-siman, Christopher Salazar, Robin Halfordsson"
+date: "2020/3/8"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r Initial Data Set-up }
+
+library(wbstats)
+library(tidyverse)
+#reference https://cran.r-project.org/web/packages/wbstats/vignettes/Using_the_wbstats_package.html
+#str(wb_cachelist)
+new_cache <- wbcache()
+##get life expectancy
+wbsearch(pattern = "life expectancy at birth, total")
+
+# Countries chosen for study
+filt1 <- c("United States" , "Mexico", "Sweden", "Argentina" , "Poland" , "Turkey", "China", "India","Korea, Rep.", "United Kingdom", "Germany", "France", "Brazil")
+
+# Indicator codes for world bank data communication 
+indi <- c("SP.DYN.LE00.IN", #life expectancy
+               "NY.ADJ.SVNG.GN.ZS", #Adjusted Net Savings
+                "NY.ADJ.NNTY.KD", #Adjusted net national income (US Adjusted)
+                "BN.CAB.XOKA.CD",  #Current account balance 
+          "GC.XPN.TOTL.GD.ZS", # Expense (% of GDP)
+         "NE.EXP.GNFS.ZS", # Export of goods (% of GDP)
+         "NY.GDP.MKTP.CD", # GDP 
+         "NY.GDP.MKTP.KD.ZG", # GDP Growth (annual %)
+         "NY.GDP.PCAP.CD", # GDP per Cap 
+         "NY.GNS.ICTR.ZS", # Gross Savings (% of GDP)
+         "NV.IND.TOTL.ZS", # Industry (% of GDP)
+         "DT.ODA.ODAT.CD", # Net official development assistance received           (current US$)
+         "GC.REV.XGRT.GD.ZS", # Revenue, excluding grants (% of GDP)
+         "CM.MKT.TRAD.GD.ZS", # Stocks traded, total value (% of GDP)
+         "IE.PPI.WATR.CD", # Investments in water/sanitation
+         "EG.USE.ELEC.KH.PC", # Electric power consumption 
+         "TX.VAL.MRCH.CD.WT", # Merchandise Exports 
+         "IC.TAX.TOTL.CP.ZS", #Total tax and contribution rate (% of profit)
+         
+         ##Siman indicator
+         "SP.DYN.TFRT.IN",#total fertility rate-(births per woman
+        "SH.MED.PHYS.ZS", #Physicians (per 1,000 people
+        "NY.ADJ.NNTY.PC.KD.ZG"	, #Adjusted net national income per capita (annual % growth)
+        "SP.POP.GROW", #Population growth (annual %)
+        "SP.URB.GROW", #urban population growth rate        
+      "AG.LND.ARBL.ZS", #Arable land (% of land area)
+      "AG.LND.ARBL.HA.PC", #Arable land (hectares per person)
+"SL.AGR.EMPL.FE.ZS", #Employment in agriculture, female (% of female employment) (modeled ILO estimate)
+"AG.CON.FERT.ZS", #Fertilizer consumption (kilograms per hectare of arable land)
+"AG.LND.CROP.ZS", #Permanent cropland (% of land area)
+#"SP.RUR.TOTL", #Rural population
+"SP.RUR.TOTL.ZS", #Rural population (% of total population)
+
+#Robin
+"EN.ATM.PM25.MC.M3", #"Air pollution mean aunnual exposure"	
+"SI.POV.GINI",  #Gini index	
+"EG.FEC.RNEW.ZS",   #"Renewable energy usage"	
+"SL.UEM.TOTL.ZS", #"Unemployment of the total workforce"	
+"SH.IMM.IDPT", # "Immunization of people DPT % of the population"	
+"EN.ATM.CO2E.SF.ZS",#"CO2 emissions of total solid fuel emissions"	
+"EN.ATM.CO2E.PP.GD", #"CO2 emissions (kg per PPP $of GDP)"	
+"EN.ATM.CO2E.PC"     #"CO2 emission metric tone per capita"	
+)
+
+df <- wb(indicator =indi, startdate = 1985, enddate = 2015) %>% filter(country %in% filt1) #%>%  select(1:5)
+which(duplicated(df))
+
+# Organize Countries and indicators
+df2 <- pivot_wider(df, names_from = c(indicator,indicatorID), values_from = value)
+
+df2_country<- pivot_wider(df, names_from =c(iso2c, iso3c, country), values_from = "value" )
+
+```
+
+## Organize Data
+
+```{r RenameV, echo=TRUE}
+df3 <- df2
+# df3$date <- as.integer(df3$date)
+
+#Rename Variables 
+names(df3) <- c("iso3c" ,  "date","iso2c",  "country", 
+                #Chris
+                "Life_expect", 'AdjustedNNS','AdjustedNNI', 'CurrAccBal', 'EXPENSE', 'ExpGoods', 'GDP', 'GDPGrowth', 
+'GDPperCAP', 'GrowthSav', 'IndValAdd', 'Net_Develop_Assistance', 'Rev', 'StockTr', 'InvWater', 'ElecPw', 'MerchExp', 'TaxContribution', 
+#Siman 
+"Fertility_rate","Physicians_1000", "AdjustedNNI_growth", "Pop_growth","Urb_pop_growth", "Arable_land_pct","Arable_land_capita","female_agri_employment_pct","Fertilizer_consumption" , "Permanent_cropland",  "rural_pop_pct",  
+#Robin
+"PM25_mean_exposure", "Gini_index","Renewable_energy_consumption_pct" , "Unemployment", "Immunization","CO2_from_solid_fuel", "CO2_kg_PPP"  ,"CO2_ton_capita" )
+```
+
+
+*This is the best fit lm model*
+```{r best fit, echo = TRUE}
+library(car)
+library(xtable)
+lm_int2 <- lm(Life_expect~ExpGoods + sqrt(GDPperCAP)
+     +Pop_growth+ Physicians_1000 + Fertility_rate + # AdjustedNNI_growth +  
+     # female_agri_employment_pct + #Fertilizer_consumption + Permanent_cropland +
+     #rural_pop_totl + rural_pop_pct    
+    + sqrt(Arable_land_capita) +#+ Gini_index + PM25_mean_exposure
+    Immunization  + CO2_ton_capita
+
+#   #+Fertilizer_consumption*Arable_land_capita #0.27
+#   # + Urb_pop_growth*GDPperCAP #0.53
+# # + PM25_mean_exposure*GDPperCAP
+# # + Gini_index*GDPperCAP
+# + Renewable_energy_consumption_pct*AdjustedNNI_growth
+# + Pop_growth*AdjustedNNI_growth
+# # + Fertility_rate*AdjustedNNI_growth
+# + CO2_ton_capita* AdjustedNNI_growth
+# # + CO2_kg_PPP* GDPperCAP ##potential!!
+# # + Arable_land_capita*AdjustedNNI_growth
+# # + Arable_land_capita*Fertility_rate
+# + CO2_from_solid_fuel*AdjustedNNI_growth
+# # + CO2_from_solid_fuel*GDPGrowth
+# # + CO2_from_solid_fuel*GDP
+# # +Fertilizer_consumption*GDPperCAP
+# # +log(MerchExp)*AdjustedNNI_growth
+# + Permanent_cropland *AdjustedNNI_growth
+# # + female_agri_employment_pct*Arable_land_capita
+# # +rural_pop_pct*AdjustedNNI_growth #siginifcant
+, data = df3)
+
+summary(lm_int2)
+vif(lm_int2)
+par(mfrow=c(2,2))
+plot(lm_int2)
+
+xtable(summary(lm_int2))
+
+ConT = confint(lm_int2)
+xtable(ConT)
+
+####Best fit model to factor recent changes---2005-2015
+df4 <- subset(df3, date %in% c("2005","2006", "2007", "2008", "2009", "2010",  "2011",  "2012", "2013", "2014", "2015"))
+
+lm_20051 <- lm(Life_expect~ # Pop_growth +  Physicians_1000 +
+     +Urb_pop_growth
+    +log(GDPperCAP)+ female_agri_employment_pct
+    + Renewable_energy_consumption_pct+ 
+    Immunization  + sqrt(Gini_index ), data = df4)
+
+summary(lm_20051)
+vif(lm_20051)
+plot(lm_20051)
+
+fit = lm(Life_expect ~ sqrt(GDPperCAP), data = df3)
+
+# LM Plot for SQUARE ROOT of GDP per Capita 
+ggplot(df3, aes(x = sqrt(GDPperCAP), y = Life_expect)) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red") + ylab('Life Expectancy (years)') + xlab('Square Root of GDP per Capita') + labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                     "Intercept =",signif(fit$coef[[1]],5 ),
+                     " Slope =",signif(fit$coef[[2]], 5),
+                     " P =",signif(summary(fit)$coef[2,4], 5)))
+
+fit = lm(Life_expect ~ female_agri_employment_pct, data = df4)
+
+# LM Plot for SQUARE ROOT of GDP per Capita 
+ggplot(df4, aes(x = female_agri_employment_pct, y = Life_expect)) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red") + ylab('Life Expectancy (years)') + xlab('Female Agriculture Employment (%)') + labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                     "Intercept =",signif(fit$coef[[1]],5 ),
+                     " Slope =",signif(fit$coef[[2]], 5),
+                     " P =",signif(summary(fit)$coef[2,4], 5)))
+
+
+#Import the cowplot library
+library(cowplot)
+
+Renewable = df4 %>% filter(df4$iso3c == 'IND') %>% ggplot(aes(x=date, y = Renewable_energy_consumption_pct)) + geom_point() + xlab('Date') + ylab('Renewable Energy %')+theme(axis.text.x = element_text(angle = 70, hjust = 1))+ggtitle('INDIA')
+
+Urban_Pop = df4 %>% filter(df4$iso3c == 'IND') %>% ggplot(aes(x=date, y = Urb_pop_growth)) + geom_point() + xlab('Date') + ylab('Urban Population Growth Rate')+theme(axis.text.x = element_text(angle = 70, hjust = 1))+ggtitle('INDIA')
+
+# Additional Plots for analysis 
+plot_grid(Renewable, Urban_Pop, labels = "AUTO")
+```
+
+
+
+*Exploratory Data Vizualization*
+```{r viz}
+
+##visualization of life expectancy
+coplot(Life_expect ~ date|country, type="l", data=df3)
+#life expectancy
+ggplot(df3, aes(x= date, y =Life_expect, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "1995"),aes(label = country),nudge_x = 1,nudge_y = 0.3, check_overlap = FALSE)
+
+#female_agri_employment_pct
+ggplot(df3, aes(x= date, y =female_agri_employment_pct, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "1995"),aes(label = country),nudge_x = 1,nudge_y = 0.3, check_overlap = FALSE)
+
+#sqrt GDP per capita
+ggplot(df3, aes(x= date, y = sqrt(GDPperCAP), colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "1995"),aes(label = country),nudge_x = 1,nudge_y = 0.3, check_overlap = FALSE)
+#log(MerchExp)
+ggplot(df3, aes(x= date, y = log(MerchExp), colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "1995"),aes(label = country),nudge_x = 1,nudge_y = 0.3, check_overlap = FALSE)
+
+#Gini--> Gini index tells something, but too much missing values-->2003/4/5 starts all
+ggplot(df3, aes(x= date, y = Gini_index, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0.3, check_overlap = FALSE)
+
+#Renewable_energy_consumption_pct---> must combine with development
+ggplot(df3, aes(x= date, y = Renewable_energy_consumption_pct, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0.3, check_overlap = FALSE)
+
+#df3$CO2_kg_PPP
+ggplot(df3, aes(x= date, y = CO2_kg_PPP, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+#Immunization
+ggplot(df3, aes(x= date, y = Immunization, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0.3, check_overlap = FALSE)
+
+#Immunization--not very explainable??? from graphic point
+# ggplot(df3, aes(x= date, y = inverse_immu, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0.3, check_overlap = FALSE)
+
+
+#Permanent_cropland--Turkey, India, China, Poland, increase; Korea rep decrease and increase, France decrease, others hold constant
+ggplot(df3, aes(x= date, y = Permanent_cropland, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0.3, check_overlap = FALSE)
+
+
+#sqrt(Fertility_rate)
+ggplot(df3, aes(x= date, y = sqrt(Fertility_rate), colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+#Physicians_1000
+ggplot(df3, aes(x= date, y = Physicians_1000, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+
+#AdjustedNNI_growth
+ggplot(df3, aes(x= date, y = AdjustedNNI_growth, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+#Pop_growth
+ggplot(df3, aes(x= date, y =Pop_growth, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+#Urb_pop_growth
+ggplot(df3, aes(x= date, y =Urb_pop_growth, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+
+#Arable_land_pct
+ggplot(df3, aes(x= date, y =Arable_land_pct, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+#Arable_land_capita 
+ggplot(df3, aes(x= date, y =Arable_land_capita, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+# Fertilizer_consumption ---too many missing values, not started until 2002?
+ggplot(df3, aes(x= date, y =Fertilizer_consumption, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+# rural_pop_pct
+ggplot(df3, aes(x= date, y =rural_pop_pct, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+
+#PM25_mean_exposure--->not until 2010
+ggplot(df3, aes(x= date, y =PM25_mean_exposure, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+#CO2_from_solid_fuel
+ggplot(df3, aes(x= date, y =CO2_from_solid_fuel, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+#CO2 kg ppp
+ggplot(df3, aes(x= date, y =CO2_kg_PPP, colour = iso3c, group_by(country)))+geom_line()+geom_text(data = subset(df3, date == "2005"),aes(label = country),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+```
+
+
+
+```{r Global Plot}
+
+Mean_life = aggregate(df3$Life_expect, list(df3$date), mean)
+# Mean Life expectancy time series plot 
+Mean_life %>% ggplot(aes(Group.1, x)) + geom_point(colour = "red", size = 3)+ xlab('Year') + ylab("Life Expectancy (Years)")+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+df3 %>% ggplot(aes(Life_expect)) + geom_histogram(color = "black", fill = "red") + xlab('Life Expectancy (years)')
+
+df4 = df3 %>% group_by(country)
+
+# Boxplot and Violin Plot 
+ggplot(df4, aes(y = Life_expect, x =country)) + geom_violin(fill = 'skyblue')+ geom_boxplot(width=0.15)+theme(axis.text.x = element_text(angle = 70, hjust = 1)) + ylab("Life Expectancy") + xlab('Country')
+
+#life expectancy
+ggplot(df4, aes(x= date, y =Life_expect, colour = iso3c))+geom_line(aes(group = iso3c))+theme(axis.text.x = element_text(angle = 90, hjust = 1)) +   
+    scale_fill_manual(name = 'Country') + ylab('Life Expectancy') + geom_text(data = subset(df3, date == "1995"),aes(label = iso3c),nudge_x = 1,nudge_y = 0, check_overlap = FALSE)
+
+#Import the cowplot library
+library(cowplot)
+
+Age_Plot = df3 %>% ggplot(aes(x=Arable_land_capita)) + geom_histogram(color="black", fill="green") + xlab('Arable Land per Capita')
+
+Sqrt_Plot = df3 %>% ggplot(aes(x=sqrt(Arable_land_capita))) + geom_histogram(color="black", fill="green") + xlab('Square Root of Arable Land per Capita')
+
+# Arable Land Transformation 
+plot_grid(Age_Plot, Sqrt_Plot, labels = "AUTO")
+```
+
+
+
